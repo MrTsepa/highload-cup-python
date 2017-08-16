@@ -1,4 +1,3 @@
-import sqlite3
 import json
 from pymongo import MongoClient
 
@@ -9,28 +8,21 @@ def fill_db2():
     client = MongoClient()
     db = client.highload
     db.users.delete_many({})
+    db.locations.delete_many({})
+    db.visits.delete_many({})
 
-    data = json.load(open(PATH_TO_DATA + '/users_1.json', 'rb'))
-    user = data['users'][0]
-    db.users.insert_one(user)
+    users_data = json.load(open(PATH_TO_DATA + '/users_1.json', 'rb'))
+    db.users.insert_many(users_data['users'])
 
-def fill_db():
-    db = sqlite3.connect("file:memdb1?mode=memory&cache=shared")
-    db.execute('''CREATE TABLE IF NOT EXISTS user(
-                    id INT,
-                    email TEXT,
-                    first_name TEXT,
-                    last_name TEXT,
-                    gender TEXT,
-                    birth_date INT);''')
-    data = json.load(open(PATH_TO_DATA + '/users_1.json', 'rb'))
-    user = data['users'][0]
-    db.execute(" INSERT INTO user VALUES (?, ?, ?, ?, ?, ?)",
-               (user['id'], user['email'], user['first_name'], user['last_name'], user['gender'], user['birth_date']))
-    user = data['users'][1]
-    db.execute(" INSERT INTO user VALUES (?, ?, ?, ?, ?, ?)",
-               (user['id'], user['email'], user['first_name'], user['last_name'], user['gender'], user['birth_date']))
-    print(db.execute("SELECT * FROM user").fetchall())
+    locations_data = json.load(open(PATH_TO_DATA + '/locations_1.json', 'rb'))
+    db.locations.insert_many(locations_data['locations'])
+
+    visits_data = json.load(open(PATH_TO_DATA + '/visits_1.json', 'rb'))
+    for visit in visits_data['visits']:
+        location = db.locations.find_one({'id': visit['location']})
+        visit['country'] = location['country']
+        visit['distance'] = location['distance']
+        db.visits.insert_one(visit)
 
 
 if __name__ == '__main__':
