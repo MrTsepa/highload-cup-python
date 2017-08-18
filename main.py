@@ -5,6 +5,8 @@ import pymongo
 from utils import fill_db2
 from bottle.ext.mongo import MongoPlugin
 
+from gevent import monkey; monkey.patch_all()
+
 app = bottle.Bottle()
 plugin = MongoPlugin(uri="mongodb://127.0.0.1", db="highload", json_mongo=True)
 app.install(plugin)
@@ -114,4 +116,4 @@ def get_location_avg(id, mongodb):
 
 if __name__ == '__main__':
     # fill_db2()
-    app.run(host='localhost', port=8080)
+    app.run(host='localhost', port=8080, server='gevent')
