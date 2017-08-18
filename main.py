@@ -1,10 +1,11 @@
 from bson.json_util import dumps
 import bottle
 import pymongo
-
 from bottle.ext.mongo import MongoPlugin
 
-# from gevent import monkey; monkey.patch_all()
+from gevent import monkey
+monkey.patch_all()
+
 from utils import to_age
 
 app = bottle.Bottle()
@@ -178,15 +179,67 @@ def update_visit(id, mongodb):
         return bottle.HTTPError(404)
     data = bottle.request.json
     # TODO validate
-    visit_update = data
+
+    if 'user' in data:
+        user = mongodb.users.find_one({'_id': data['user']})
+        if not user:
+            return bottle.HTTPError(400)
+        data['user__age'] = user['age']
+        data['user__gender'] = user['gender']
+    if 'location' in data:
+        location = mongodb.locations.find_one({'_id': data['location']})
+        if not location:
+            return bottle.HTTPError(400)
+        data['location__distance'] = location['distance']
+        data['location__country'] = location['country']
     mongodb.visits.update(
         {"_id": id},
-        {"$set": visit_update}
+        {"$set": data}
     )
+
+
+@app.post('/users/new')
+def new_user(mongodb):
+    data = bottle.request.json
+    # TODO validate
+    data['_id'] = data['id']
+    data['age'] = to_age(data['birth_date'])
+    mongodb.users.insert(data)
+    return {}
+
+
+@app.post('/locations/new')
+def new_location(mongodb):
+    data = bottle.request.json
+    # TODO validate
+    data['_id'] = data['id']
+    mongodb.locations.insert(data)
+    return {}
+
+
+@app.post('/visits/new')
+def new_visit(mongodb):
+    data = bottle.request.json
+    # TODO validate
+    user = mongodb.users.find_one({'_id': data['user']})
+    if not user:
+        return bottle.HTTPError(400)
+    location = mongodb.locations.find_one({'_id': data['location']})
+    if not location:
+        return bottle.HTTPError(400)
+
+    data['location__distance'] = location['distance']
+    data['location__country'] = location['country']
+    data['user__age'] = user['age']
+    data['user__gender'] = user['gender']
+
+    data['_id'] = data['id']
+    mongodb.visits.insert(data)
+    return {}
 
 
 if __name__ == '__main__':
     app.run(
         host='localhost', port=8080,
-        # server='gevent'
+        server='gevent'
     )
