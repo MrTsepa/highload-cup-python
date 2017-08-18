@@ -4,7 +4,8 @@ import pymongo
 
 from bottle.ext.mongo import MongoPlugin
 
-from gevent import monkey; monkey.patch_all()
+# from gevent import monkey; monkey.patch_all()
+from utils import to_age
 
 app = bottle.Bottle()
 plugin = MongoPlugin(uri="mongodb://127.0.0.1", db="highload", json_mongo=True)
@@ -115,8 +116,77 @@ def get_location_avg(id, mongodb):
         avg = sum(v['mark'] for v in result) / c
     return {'avg': round(avg, 5)}
 
+
+@app.post('/users/<id:int>')
+def update_user(id, mongodb):
+    user = mongodb.users.find_one({'_id': id})
+    if not user:
+        return bottle.HTTPError(404)
+    data = bottle.request.json
+    # TODO validate
+    user_update = data
+    new_age = None
+    if 'birth_date' in data:
+        new_age = to_age(data['birth_date'])
+        if new_age != user['age']:
+            user_update['age'] = new_age
+    mongodb.users.update(
+        {"_id": id},
+        {"$set": user_update}
+    )
+    visits_update = {}
+    if 'gender' in data:
+        visits_update['user__gender'] = data['gender']
+    if new_age is not None:
+        visits_update['user__age'] = new_age
+    if visits_update:
+        mongodb.visits.update(
+            {"user": id},
+            {"$set": visits_update}
+        )
+    return {}
+
+
+@app.post('/locations/<id:int>')
+def update_location(id, mongodb):
+    location = mongodb.locations.find_one({'_id': id})
+    if not location:
+        return bottle.HTTPError(404)
+    data = bottle.request.json
+    # TODO validate
+    location_update = data
+    mongodb.locations.update(
+        {"_id": id},
+        {"$set": location_update}
+    )
+    visits_update = {}
+    if 'country' in data:
+        visits_update['location__country'] = data['country']
+    if 'distance' in data:
+        visits_update['location__distance'] = data['distance']
+    if visits_update:
+        mongodb.visits.update({
+            {"user": id},
+            {"$set": visits_update}
+        })
+
+
+@app.post('/visits/<id:int>')
+def update_visit(id, mongodb):
+    visit = mongodb.visits.find_one({'_id': id})
+    if not visit:
+        return bottle.HTTPError(404)
+    data = bottle.request.json
+    # TODO validate
+    visit_update = data
+    mongodb.visits.update(
+        {"_id": id},
+        {"$set": visit_update}
+    )
+
+
 if __name__ == '__main__':
     app.run(
         host='localhost', port=8080,
-        server='gevent'
+        # server='gevent'
     )
