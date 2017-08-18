@@ -22,9 +22,9 @@ def fill_db():
     db.locations.delete_many({})
     db.visits.delete_many({})
 
-    users_data = json.load(open(PATH_TO_DATA + '/users_1.json', 'rb'))
-    locations_data = json.load(open(PATH_TO_DATA + '/locations_1.json', 'rb'))
-    visits_data = json.load(open(PATH_TO_DATA + '/visits_1.json', 'rb'))
+    users_data = json.load(open(PATH_TO_DATA + '/users_1.json', 'r'))
+    locations_data = json.load(open(PATH_TO_DATA + '/locations_1.json', 'r'))
+    visits_data = json.load(open(PATH_TO_DATA + '/visits_1.json', 'r'))
 
     for user in users_data['users']:
         user['_id'] = user['id']
@@ -80,7 +80,7 @@ def fill_db_full():
     for i in range(1, 22):
         path = '{}/users_{}.json'.format(PATH_TO_FULL, i)
         print(i)
-        data = json.load(open(path, 'rb'))
+        data = json.load(open(path, 'r'))
         for user in data['users']:
             user['_id'] = user['id']
             user['age'] = to_age(user['birth_date'])
@@ -91,7 +91,7 @@ def fill_db_full():
     for i in range(1, 17):
         path = '{}/locations_{}.json'.format(PATH_TO_FULL, i)
         print(i)
-        data = json.load(open(path, 'rb'))
+        data = json.load(open(path, 'r'))
         for location in data['locations']:
             location['_id'] = location['id']
         db.locations.insert_many(data['locations'])
@@ -101,7 +101,7 @@ def fill_db_full():
     for i in range(1, 22):
         path = '{}/visits_{}.json'.format(PATH_TO_FULL, i)
         print(i)
-        data = json.load(open(path, 'rb'))
+        data = json.load(open(path, 'r'))
         for visit in data['visits']:
             visit['_id'] = visit['id']
         db.visits.insert_many(data['visits'])
@@ -140,6 +140,6 @@ def fill_db_full():
 
 if __name__ == '__main__':
     t = time()
-    # fill_db()
-    fill_db_full()
+    fill_db()
+    # fill_db_full()
     print(time() - t)
