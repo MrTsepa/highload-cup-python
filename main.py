@@ -1,9 +1,12 @@
 from bson.json_util import dumps
 import bottle
 import pymongo
-
-from utils import fill_db2
 from bottle.ext.mongo import MongoPlugin
+
+from gevent import monkey
+monkey.patch_all()
+
+from utils import to_age
 
 app = bottle.Bottle()
 plugin = MongoPlugin(uri="mongodb://127.0.0.1", db="highload", json_mongo=True)
@@ -30,7 +33,8 @@ def get_location(id, mongodb):
 def get_visit(id, mongodb):
     visits = mongodb.visits.find_one({'_id': id}, {
             '_id': False, 'location__country': False, 'location__distance': False,
-            'location_full_arr': False, 'user_full_arr': False, 'user__age': False
+            'location_full_arr': False, 'user_full_arr': False, 'user__age': False,
+            'user__gender': False
         })
     if visits:
         return visits
@@ -39,7 +43,7 @@ def get_visit(id, mongodb):
 
 @app.get('/users/<id:int>/visits')
 def get_user_visits(id, mongodb):
-    if mongodb.users.find({'_id': id}, {'_id': 1}).limit(1).count(with_limit_and_skip=True) == 0:
+    if not mongodb.users.find_one({'_id': id}):
         return bottle.HTTPError(404)
     fromDate = bottle.request.query.fromDate
     toDate = bottle.request.query.toDate
@@ -66,7 +70,7 @@ def get_user_visits(id, mongodb):
     result = mongodb.visits.find(
         filter_query, {
             '_id': False, 'id': False, 'user': False, 'location__country': False, 'location__distance': False,
-            'location_full_arr': False, 'user_full_arr': False, 'user__age': False
+            'location_full_arr': False, 'user_full_arr': False, 'user__age': False, 'user__gender': False
         }
     ).sort('visited_at', pymongo.ASCENDING)
     return dumps({'visits': result})
@@ -74,7 +78,7 @@ def get_user_visits(id, mongodb):
 
 @app.get('/locations/<id:int>/avg')
 def get_location_avg(id, mongodb):
-    if mongodb.locations.find({'_id': id}, {'_id': 1}).limit(1).count(with_limit_and_skip=True) == 0:
+    if not mongodb.locations.find_one({'_id': id}):
         return bottle.HTTPError(404)
     fromDate = bottle.request.query.fromDate
     toDate = bottle.request.query.toDate
@@ -106,12 +110,136 @@ def get_location_avg(id, mongodb):
         return bottle.HTTPError(400)
 
     result = mongodb.visits.find(filter_query, {'mark': True})
-    if result.count() == 0:
+    c = result.count()
+    if c == 0:
         avg = 0
     else:
-        avg = sum(v['mark'] for v in result) / result.count()
-    return dumps({'avg': round(avg, 5)})
+        avg = sum(v['mark'] for v in result) / c
+    return {'avg': round(avg, 5)}
+
+
+@app.post('/users/<id:int>')
+def update_user(id, mongodb):
+    user = mongodb.users.find_one({'_id': id})
+    if not user:
+        return bottle.HTTPError(404)
+    data = bottle.request.json
+    # TODO validate
+    user_update = data
+    new_age = None
+    if 'birth_date' in data:
+        new_age = to_age(data['birth_date'])
+        if new_age != user['age']:
+            user_update['age'] = new_age
+    mongodb.users.update(
+        {"_id": id},
+        {"$set": user_update}
+    )
+    visits_update = {}
+    if 'gender' in data:
+        visits_update['user__gender'] = data['gender']
+    if new_age is not None:
+        visits_update['user__age'] = new_age
+    if visits_update:
+        mongodb.visits.update(
+            {"user": id},
+            {"$set": visits_update}
+        )
+    return {}
+
+
+@app.post('/locations/<id:int>')
+def update_location(id, mongodb):
+    location = mongodb.locations.find_one({'_id': id})
+    if not location:
+        return bottle.HTTPError(404)
+    data = bottle.request.json
+    # TODO validate
+    location_update = data
+    mongodb.locations.update(
+        {"_id": id},
+        {"$set": location_update}
+    )
+    visits_update = {}
+    if 'country' in data:
+        visits_update['location__country'] = data['country']
+    if 'distance' in data:
+        visits_update['location__distance'] = data['distance']
+    if visits_update:
+        mongodb.visits.update({
+            {"user": id},
+            {"$set": visits_update}
+        })
+
+
+@app.post('/visits/<id:int>')
+def update_visit(id, mongodb):
+    visit = mongodb.visits.find_one({'_id': id})
+    if not visit:
+        return bottle.HTTPError(404)
+    data = bottle.request.json
+    # TODO validate
+
+    if 'user' in data:
+        user = mongodb.users.find_one({'_id': data['user']})
+        if not user:
+            return bottle.HTTPError(400)
+        data['user__age'] = user['age']
+        data['user__gender'] = user['gender']
+    if 'location' in data:
+        location = mongodb.locations.find_one({'_id': data['location']})
+        if not location:
+            return bottle.HTTPError(400)
+        data['location__distance'] = location['distance']
+        data['location__country'] = location['country']
+    mongodb.visits.update(
+        {"_id": id},
+        {"$set": data}
+    )
+
+
+@app.post('/users/new')
+def new_user(mongodb):
+    data = bottle.request.json
+    # TODO validate
+    data['_id'] = data['id']
+    data['age'] = to_age(data['birth_date'])
+    mongodb.users.insert(data)
+    return {}
+
+
+@app.post('/locations/new')
+def new_location(mongodb):
+    data = bottle.request.json
+    # TODO validate
+    data['_id'] = data['id']
+    mongodb.locations.insert(data)
+    return {}
+
+
+@app.post('/visits/new')
+def new_visit(mongodb):
+    data = bottle.request.json
+    # TODO validate
+    user = mongodb.users.find_one({'_id': data['user']})
+    if not user:
+        return bottle.HTTPError(400)
+    location = mongodb.locations.find_one({'_id': data['location']})
+    if not location:
+        return bottle.HTTPError(400)
+
+    data['location__distance'] = location['distance']
+    data['location__country'] = location['country']
+    data['user__age'] = user['age']
+    data['user__gender'] = user['gender']
+
+    data['_id'] = data['id']
+    mongodb.visits.insert(data)
+    return {}
+
 
 if __name__ == '__main__':
-    # fill_db2()
-    app.run(host='localhost', port=8080)
+    app.run(
+        host='localhost', port=8080,
+        server='gevent'
+    )
