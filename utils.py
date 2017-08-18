@@ -15,7 +15,7 @@ def to_age(timestamp):
     return relativedelta(NOW_datetime, d).years
 
 
-def fill_db2():
+def fill_db():
     client = MongoClient()
     db = client.highload
     db.users.delete_many({})
@@ -38,6 +38,7 @@ def fill_db2():
     for visit in visits_data['visits']:
         visit['_id'] = visit['id']
     db.visits.insert_many(visits_data['visits'])
+    print("Aggregating...")
     db.visits.aggregate([
         {'$lookup': {
             'from': 'locations',
@@ -60,6 +61,11 @@ def fill_db2():
         }},
         {'$out': 'visits'}
     ])
+    print("Finished")
+    print("Creating indexes...")
+    db.visits.create_index("user")
+    db.visits.create_index("location")
+    print("Finished")
     one = db.visits.find_one()
     print(one)
 
@@ -70,10 +76,10 @@ def fill_db_full():
     db.users.delete_many({})
     db.locations.delete_many({})
     db.visits.delete_many({})
-
+    print("Reading users...")
     for i in range(1, 22):
         path = '{}/users_{}.json'.format(PATH_TO_FULL, i)
-        print(path)
+        print(i)
         data = json.load(open(path, 'rb'))
         for user in data['users']:
             user['_id'] = user['id']
@@ -81,23 +87,26 @@ def fill_db_full():
         db.users.insert_many(data['users'])
     print("Users count: " + str(db.users.find({}).count()))
 
+    print("Reading locations...")
     for i in range(1, 17):
         path = '{}/locations_{}.json'.format(PATH_TO_FULL, i)
-        print(path)
+        print(i)
         data = json.load(open(path, 'rb'))
         for location in data['locations']:
             location['_id'] = location['id']
         db.locations.insert_many(data['locations'])
     print("Locations count: " + str(db.locations.find({}).count()))
 
+    print("Reading visits...")
     for i in range(1, 22):
         path = '{}/visits_{}.json'.format(PATH_TO_FULL, i)
-        print(path)
+        print(i)
         data = json.load(open(path, 'rb'))
         for visit in data['visits']:
             visit['_id'] = visit['id']
         db.visits.insert_many(data['visits'])
     print("Visits count: " + str(db.visits.find({}).count()))
+    print("Aggregating...")
     db.visits.aggregate([
         {'$lookup': {
             'from': 'locations',
@@ -121,11 +130,16 @@ def fill_db_full():
         }},
         {'$out': 'visits'}
     ])
+    print("Finished")
+    print("Creating indexes...")
+    db.visits.create_index("user")
+    db.visits.create_index("location")
+    print("Finished")
     print(db.visits.find_one())
 
 
 if __name__ == '__main__':
     t = time()
-    # fill_db2()
+    # fill_db()
     fill_db_full()
     print(time() - t)

@@ -2,7 +2,6 @@ from bson.json_util import dumps
 import bottle
 import pymongo
 
-from utils import fill_db2
 from bottle.ext.mongo import MongoPlugin
 
 from gevent import monkey; monkey.patch_all()
@@ -32,7 +31,8 @@ def get_location(id, mongodb):
 def get_visit(id, mongodb):
     visits = mongodb.visits.find_one({'_id': id}, {
             '_id': False, 'location__country': False, 'location__distance': False,
-            'location_full_arr': False, 'user_full_arr': False, 'user__age': False
+            'location_full_arr': False, 'user_full_arr': False, 'user__age': False,
+            'user__gender': False
         })
     if visits:
         return visits
@@ -41,7 +41,7 @@ def get_visit(id, mongodb):
 
 @app.get('/users/<id:int>/visits')
 def get_user_visits(id, mongodb):
-    if mongodb.users.find({'_id': id}, {'_id': 1}).limit(1).count(with_limit_and_skip=True) == 0:
+    if not mongodb.users.find_one({'_id': id}):
         return bottle.HTTPError(404)
     fromDate = bottle.request.query.fromDate
     toDate = bottle.request.query.toDate
@@ -68,7 +68,7 @@ def get_user_visits(id, mongodb):
     result = mongodb.visits.find(
         filter_query, {
             '_id': False, 'id': False, 'user': False, 'location__country': False, 'location__distance': False,
-            'location_full_arr': False, 'user_full_arr': False, 'user__age': False
+            'location_full_arr': False, 'user_full_arr': False, 'user__age': False, 'user__gender': False
         }
     ).sort('visited_at', pymongo.ASCENDING)
     return dumps({'visits': result})
@@ -76,7 +76,7 @@ def get_user_visits(id, mongodb):
 
 @app.get('/locations/<id:int>/avg')
 def get_location_avg(id, mongodb):
-    if mongodb.locations.find({'_id': id}, {'_id': 1}).limit(1).count(with_limit_and_skip=True) == 0:
+    if not mongodb.locations.find_one({'_id': id}):
         return bottle.HTTPError(404)
     fromDate = bottle.request.query.fromDate
     toDate = bottle.request.query.toDate
@@ -108,12 +108,15 @@ def get_location_avg(id, mongodb):
         return bottle.HTTPError(400)
 
     result = mongodb.visits.find(filter_query, {'mark': True})
-    if result.count() == 0:
+    c = result.count()
+    if c == 0:
         avg = 0
     else:
-        avg = sum(v['mark'] for v in result) / result.count()
-    return dumps({'avg': round(avg, 5)})
+        avg = sum(v['mark'] for v in result) / c
+    return {'avg': round(avg, 5)}
 
 if __name__ == '__main__':
-    # fill_db2()
-    app.run(host='localhost', port=8080, server='gevent')
+    app.run(
+        host='localhost', port=8080,
+        server='gevent'
+    )
