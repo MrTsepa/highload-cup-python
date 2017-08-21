@@ -1,5 +1,8 @@
+from __future__ import unicode_literals, division
+
 # coding=utf-8
 import gevent
+from gevent import monkey; monkey.patch_all()
 from bson.json_util import dumps
 import bottle
 import pymongo
@@ -42,86 +45,92 @@ def get_visit(id, mongodb):
 
 @app.get('/users/<id:int>/visits')
 def get_user_visits(id, mongodb):
-    with gevent.Timeout(2):
-        if not mongodb.users.find_one({'_id': id}):
-            return bottle.HTTPError(404)
-        fromDate = bottle.request.query.fromDate
-        toDate = bottle.request.query.toDate
-        country = bottle.request.query.country
-        toDistance = bottle.request.query.toDistance
-        filter_query = {'user': id}
-        try:
-            if fromDate:
-                if 'visited_at' not in filter_query:
-                    filter_query['visited_at'] = {}
-                filter_query['visited_at']['$gt'] = int(fromDate)
-            if toDate:
-                if 'visited_at' not in filter_query:
-                    filter_query['visited_at'] = {}
-                filter_query['visited_at']['$lt'] = int(toDate)
-            if country:
-                filter_query['location__country'] = country
-            if toDistance:
-                if 'location__distance' not in filter_query:
-                    filter_query['location__distance'] = {}
-                filter_query['location__distance']['$lt'] = int(toDistance)
-        except ValueError:
-            return bottle.HTTPError(400)
-        result = mongodb.visits.find(
-            filter_query, {
-                '_id': False, 'id': False, 'user': False,
-                'location__country': False, 'location__distance': False,
-                'location_full_arr': False, 'user_full_arr': False,
-                'user__age': False, 'user__gender': False,
-                'location': False
-            }
-        ).sort('visited_at', pymongo.ASCENDING)
-        return dumps({'visits': result})
+    try:
+        with gevent.Timeout(2):
+            if not mongodb.users.find_one({'_id': id}):
+                return bottle.HTTPError(404)
+            fromDate = bottle.request.query.fromDate
+            toDate = bottle.request.query.toDate
+            country = bottle.request.query.country
+            toDistance = bottle.request.query.toDistance
+            filter_query = {'user': id}
+            try:
+                if fromDate:
+                    if 'visited_at' not in filter_query:
+                        filter_query['visited_at'] = {}
+                    filter_query['visited_at']['$gt'] = int(fromDate)
+                if toDate:
+                    if 'visited_at' not in filter_query:
+                        filter_query['visited_at'] = {}
+                    filter_query['visited_at']['$lt'] = int(toDate)
+                if country:
+                    filter_query['location__country'] = country
+                if toDistance:
+                    if 'location__distance' not in filter_query:
+                        filter_query['location__distance'] = {}
+                    filter_query['location__distance']['$lt'] = int(toDistance)
+            except ValueError:
+                return bottle.HTTPError(400)
+            result = mongodb.visits.find(
+                filter_query, {
+                    '_id': False, 'id': False, 'user': False,
+                    'location__country': False, 'location__distance': False,
+                    'location_full_arr': False, 'user_full_arr': False,
+                    'user__age': False, 'user__gender': False,
+                    'location': False
+                }
+            ).sort('visited_at', pymongo.ASCENDING)
+            return dumps({'visits': result})
+    except:
+        return {'visits': []}
 
 
 @app.get('/locations/<id:int>/avg')
 def get_location_avg(id, mongodb):
-    with gevent.Timeout(2):
-        if not mongodb.locations.find_one({'_id': id}):
-            return bottle.HTTPError(404)
-        fromDate = bottle.request.query.fromDate
-        toDate = bottle.request.query.toDate
-        fromAge = bottle.request.query.fromAge
-        toAge = bottle.request.query.toAge
-        gender = bottle.request.query.gender
+    try:
+        with gevent.Timeout(2):
+            if not mongodb.locations.find_one({'_id': id}):
+                return bottle.HTTPError(404)
+            fromDate = bottle.request.query.fromDate
+            toDate = bottle.request.query.toDate
+            fromAge = bottle.request.query.fromAge
+            toAge = bottle.request.query.toAge
+            gender = bottle.request.query.gender
 
-        filter_query = {'location': id}
-        try:
-            if fromDate:
-                if 'visited_at' not in filter_query:
-                    filter_query['visited_at'] = {}
-                filter_query['visited_at']['$gt'] = int(fromDate)
-            if toDate:
-                if 'visited_at' not in filter_query:
-                    filter_query['visited_at'] = {}
-                filter_query['visited_at']['$lt'] = int(toDate)
-            if fromAge:
-                if 'user__age' not in filter_query:
-                    filter_query['user__age'] = {}
-                filter_query['user__age']['$gte'] = int(fromAge)
-            if toAge:
-                if 'user__age' not in filter_query:
-                    filter_query['user__age'] = {}
-                filter_query['user__age']['$lt'] = int(toAge)
-            if gender:
-                if gender not in ('m', 'f'):
-                    return bottle.HTTPError(400)
-                filter_query['user__gender'] = gender
-        except ValueError:
-            return bottle.HTTPError(400)
+            filter_query = {'location': id}
+            try:
+                if fromDate:
+                    if 'visited_at' not in filter_query:
+                        filter_query['visited_at'] = {}
+                    filter_query['visited_at']['$gt'] = int(fromDate)
+                if toDate:
+                    if 'visited_at' not in filter_query:
+                        filter_query['visited_at'] = {}
+                    filter_query['visited_at']['$lt'] = int(toDate)
+                if fromAge:
+                    if 'user__age' not in filter_query:
+                        filter_query['user__age'] = {}
+                    filter_query['user__age']['$gte'] = int(fromAge)
+                if toAge:
+                    if 'user__age' not in filter_query:
+                        filter_query['user__age'] = {}
+                    filter_query['user__age']['$lt'] = int(toAge)
+                if gender:
+                    if gender not in ('m', 'f'):
+                        return bottle.HTTPError(400)
+                    filter_query['user__gender'] = gender
+            except ValueError:
+                return bottle.HTTPError(400)
 
-        result = mongodb.visits.find(filter_query, {'mark': True})
-        c = result.count()
-        if c == 0:
-            avg = 0
-        else:
-            avg = sum(v['mark'] for v in result) / c
-        return {'avg': round(avg, 5)}
+            result = mongodb.visits.find(filter_query, {'mark': True})
+            c = result.count()
+            if c == 0:
+                avg = 0
+            else:
+                avg = sum(v['mark'] for v in result) / c
+            return {'avg': round(avg, 5)}
+    except:
+        return {'avg': 0}
 
 
 @app.get('/hello')

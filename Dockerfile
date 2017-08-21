@@ -1,11 +1,9 @@
 FROM ubuntu
 
-
 RUN apt-get update \
-  && apt-get install -y python3-pip python3-dev \
-  && cd /usr/local/bin \
-  && ln -s /usr/bin/python3 python \
-  && pip3 install --upgrade pip
+  && apt-get install -y python python-dev python-pip \
+  && pip install --upgrade pip
+
 
 RUN pip install bottle pymongo bottle-mongo python-dateutil gevent
 
@@ -15,6 +13,21 @@ RUN \
     && echo "deb [ arch=amd64,arm64 ] http://repo.mongodb.org/apt/ubuntu xenial/mongodb-org/3.4 multiverse" | tee /etc/apt/sources.list.d/mongodb-org-3.4.list \
     && apt-get update \
     && apt-get install -y mongodb-org
+
+
+
+# Install Nginx.
+RUN \
+  apt-get install -y software-properties-common python-software-properties && \
+  add-apt-repository -y ppa:nginx/stable && \
+  apt-get update && \
+  apt-get install -y nginx && \
+  rm -rf /var/lib/apt/lists/* && \
+  chown -R www-data:www-data /var/lib/nginx
+
+# Define mountable directories.
+VOLUME ["/etc/nginx/certs", "/etc/nginx/conf.d", "/var/log/nginx", "/var/www/html"]
+
 
 # Define mountable directories.
 VOLUME ["/data/db"]
@@ -27,13 +40,16 @@ WORKDIR /data
 # Expose ports
 EXPOSE 80
 
+
+COPY nginx_balance.conf /etc/nginx/sites-enabled/default
+
 ADD . /app
 WORKDIR /app
 
-ENV PYTHONENCODING=utf-8
-ENV LANG=ru_RU.UTF-8
-
-CMD mongod --fork --logpath mongodb_logs; \
+CMD nginx; \
+    mongod --fork --logpath mongodb_logs; \
     python unzip_data.py /tmp/data/data.zip; \
     python fill_db_full.py; \
-    python run_gevent.py 0.0.0.0 80
+    python run_multi_gevent.py 0.0.0.0 8080 8081 8082 8083
+
+#    python run_gevent.py 0.0.0.0 80

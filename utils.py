@@ -1,16 +1,18 @@
+from __future__ import unicode_literals
+
 # coding=utf-8
 import datetime
 import json
 from dateutil.relativedelta import relativedelta
-
+from time import time
 PATH_TO_DATA = 'data'
 PATH_TO_FULL = 'data'
 
 try:
     with open(PATH_TO_DATA+'/options.txt') as file:
         NOW_timestamp = int(file.readline())
-except FileNotFoundError:
-    NOW_timestamp = datetime.datetime.now().timestamp()
+except Exception:
+    NOW_timestamp = (datetime.datetime.now() - datetime.datetime(1970, 1, 1)).total_seconds()
 NOW_datetime = datetime.datetime.fromtimestamp(NOW_timestamp).replace(hour=0, minute=0, second=0)
 
 aggregation_query = [
@@ -95,10 +97,9 @@ def fill_db_full(db):
     print("Reading users...")
     for i in range(1, 100):
         path = '{}/users_{}.json'.format(PATH_TO_FULL, i)
-        print(i)
         try:
-            data = json.load(open(path, 'r', encoding='utf8'))
-        except FileNotFoundError:
+            data = json.load(open(path, 'r'))
+        except:
             break
         for user in data['users']:
             user['_id'] = user['id']
@@ -109,10 +110,9 @@ def fill_db_full(db):
     print("Reading locations...")
     for i in range(1, 100):
         path = '{}/locations_{}.json'.format(PATH_TO_FULL, i)
-        print(i)
         try:
-            data = json.load(open(path, 'r', encoding='utf8'))
-        except FileNotFoundError:
+            data = json.load(open(path, 'r'))
+        except:
             break
         for location in data['locations']:
             location['_id'] = location['id']
@@ -122,20 +122,24 @@ def fill_db_full(db):
     print("Reading visits...")
     for i in range(1, 100):
         path = '{}/visits_{}.json'.format(PATH_TO_FULL, i)
-        print(i)
         try:
-            data = json.load(open(path, 'r', encoding='utf8'))
-        except FileNotFoundError:
+            data = json.load(open(path, 'r'))
+        except:
             break
         for visit in data['visits']:
             visit['_id'] = visit['id']
         db.visits.insert_many(data['visits'])
     print("Visits count: " + str(db.visits.find({}).count()))
+    t = time()
     print("Aggregating...")
     db.visits.aggregate(aggregation_query)
     print("Finished")
+    print(time() - t)
+    t = time()
     print("Creating indexes...")
     db.visits.create_index("user")
     db.visits.create_index("location")
+    db.visits.create_index("visited_at")
     print("Finished")
+    print(time() - t)
     # print(db.visits.find_one())
