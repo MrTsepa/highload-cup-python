@@ -35,7 +35,7 @@ def get_location(id, mongodb):
 def get_visit(id, mongodb):
     visits = mongodb.visits.find_one({'_id': id}, {
             '_id': False, 'location__country': False, 'location__distance': False,
-            'location_full_arr': False, 'user_full_arr': False, 'user__age': False,
+            'location_full': False, 'user_full': False, 'user__age': False,
             'user__gender': False, 'place': False
         })
     if visits:
@@ -75,7 +75,7 @@ def get_user_visits(id, mongodb):
                 filter_query, {
                     '_id': False, 'id': False, 'user': False,
                     'location__country': False, 'location__distance': False,
-                    'location_full_arr': False, 'user_full_arr': False,
+                    'location_full': False, 'user_full': False,
                     'user__age': False, 'user__gender': False,
                     'location': False
                 }

@@ -20,25 +20,41 @@ aggregation_query = [
         'from': 'locations',
         'localField': 'location',
         'foreignField': '_id',
-        'as': 'location_full_arr'
+        'as': 'location_full'
     }},
-    {'$addFields': {
-        'location__distance': {'$arrayElemAt': ['$location_full_arr.distance', 0]},
-        'location__country': {'$arrayElemAt': ['$location_full_arr.country', 0]},
-        'place': {'$arrayElemAt': ['$location_full_arr.place', 0]},
-    }},
+    {'$unwind': '$location_full'},
     {'$lookup': {
         'from': 'users',
         'localField': 'user',
         'foreignField': '_id',
-        'as': 'user_full_arr'
+        'as': 'user_full'
     }},
+    {'$unwind': '$user_full'},
     {'$addFields': {
-        'user__age': {'$arrayElemAt': ['$user_full_arr.age', 0]},
-        'user__gender': {'$arrayElemAt': ['$user_full_arr.gender', 0]},
+        'location__distance': '$location_full.distance',
+        'location__country': '$location_full.country',
+        'place': '$location_full.place',
+        'user__age': '$user_full.age',
+        'user__gender': '$user_full.gender',
     }},
     {'$out': 'visits'}
 ]
+
+
+class Timeit:
+
+    def __init__(self, message=''):
+        self.message = message
+        self.start = None
+        self.end = None
+
+    def __enter__(self):
+        print("+ " + self.message)
+        self.start = time()
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self.end = time()
+        print("- " + self.message + " in " + str(self.end - self.start))
 
 
 def to_age(timestamp):
@@ -52,94 +68,50 @@ def delete_all(db):
     db.visits.delete_many({})
 
 
-def fill_db_train(db):
-    delete_all(db)
+def fill_db_full(db, path_to_dir=PATH_TO_FULL):
+    with Timeit("Clearing db"):
+        delete_all(db)
+    with Timeit("Reading users..."):
+        for i in range(1, 100):
+            path = '{}/users_{}.json'.format(path_to_dir, i)
+            try:
+                data = json.load(open(path, 'r'))
+            except:
+                break
+            for user in data['users']:
+                user['_id'] = user['id']
+                user['age'] = to_age(user['birth_date'])
+            db.users.insert_many(data['users'])
+        print("Users count: " + str(db.users.find({}).count()))
 
-    users_data = json.load(open(PATH_TO_DATA + '/users_1.json', 'r'))
-    locations_data = json.load(open(PATH_TO_DATA + '/locations_1.json', 'r'))
-    visits_data = json.load(open(PATH_TO_DATA + '/visits_1.json', 'r'))
+    with Timeit("Reading locations..."):
+        for i in range(1, 100):
+            path = '{}/locations_{}.json'.format(path_to_dir, i)
+            try:
+                data = json.load(open(path, 'r'))
+            except:
+                break
+            for location in data['locations']:
+                location['_id'] = location['id']
+            db.locations.insert_many(data['locations'])
+        print("Locations count: " + str(db.locations.find({}).count()))
 
-    for user in users_data['users']:
-        user['_id'] = user['id']
-        user['age'] = to_age(user['birth_date'])
-    db.users.insert_many((users_data['users']))
+    with Timeit("Reading visits..."):
+        for i in range(1, 100):
+            path = '{}/visits_{}.json'.format(path_to_dir, i)
+            try:
+                data = json.load(open(path, 'r'))
+            except:
+                break
+            for visit in data['visits']:
+                visit['_id'] = visit['id']
+            db.visits.insert_many(data['visits'])
+        print("Visits count: " + str(db.visits.find({}).count()))
 
-    for location in locations_data['locations']:
-        location['_id'] = location['id']
-    db.locations.insert_many(locations_data['locations'])
+    with Timeit("Aggregating..."):
+        db.visits.aggregate(aggregation_query)
 
-    for visit in visits_data['visits']:
-        visit['_id'] = visit['id']
-    db.visits.insert_many(visits_data['visits'])
-    print("Aggregating...")
-    db.visits.aggregate(aggregation_query)
-    print("Finished")
-    print("Removing fields...")
-    db.visits.update(
-        {},
-        {'$unset': {
-            'location_full_arr': '',
-            'user_full_arr': ''
-        }},
-        upsert=False, multi=True
-    )
-    print("Finished")
-    print("Creating indexes...")
-    db.visits.create_index("user")
-    db.visits.create_index("location")
-    print("Finished")
-    one = db.visits.find_one()
-    # print(one)
-
-
-def fill_db_full(db):
-    delete_all(db)
-    print("Reading users...")
-    for i in range(1, 100):
-        path = '{}/users_{}.json'.format(PATH_TO_FULL, i)
-        try:
-            data = json.load(open(path, 'r'))
-        except:
-            break
-        for user in data['users']:
-            user['_id'] = user['id']
-            user['age'] = to_age(user['birth_date'])
-        db.users.insert_many(data['users'])
-    print("Users count: " + str(db.users.find({}).count()))
-
-    print("Reading locations...")
-    for i in range(1, 100):
-        path = '{}/locations_{}.json'.format(PATH_TO_FULL, i)
-        try:
-            data = json.load(open(path, 'r'))
-        except:
-            break
-        for location in data['locations']:
-            location['_id'] = location['id']
-        db.locations.insert_many(data['locations'])
-    print("Locations count: " + str(db.locations.find({}).count()))
-
-    print("Reading visits...")
-    for i in range(1, 100):
-        path = '{}/visits_{}.json'.format(PATH_TO_FULL, i)
-        try:
-            data = json.load(open(path, 'r'))
-        except:
-            break
-        for visit in data['visits']:
-            visit['_id'] = visit['id']
-        db.visits.insert_many(data['visits'])
-    print("Visits count: " + str(db.visits.find({}).count()))
-    t = time()
-    print("Aggregating...")
-    db.visits.aggregate(aggregation_query)
-    print("Finished")
-    print(time() - t)
-    t = time()
-    print("Creating indexes...")
-    db.visits.create_index("user")
-    db.visits.create_index("location")
-    db.visits.create_index("visited_at")
-    print("Finished")
-    print(time() - t)
-    # print(db.visits.find_one())
+    with Timeit("Creating indexes..."):
+        db.visits.create_index("user")
+        db.visits.create_index("location")
+        # db.visits.create_index("visited_at")

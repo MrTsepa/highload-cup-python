@@ -3,15 +3,14 @@ from time import time
 
 from pymongo import MongoClient
 
-from utils import fill_db_full
+from utils import fill_db_full, Timeit
 
 
 def fill_db():
     client = MongoClient()
     db = client.highload
-    t = time()
-    fill_db_full(db)
-    print(time() - t)
+    with Timeit("Reading database..."):
+        fill_db_full(db)
 
 if __name__ == '__main__':
     fill_db()
