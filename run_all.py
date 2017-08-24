@@ -5,15 +5,15 @@ import json
 import urllib
 from time import time
 
-import gevent
+# import gevent
 import pymongo
 import bottle
 
 from multiprocessing import Process
 
 import sys
-from gevent import monkey, sleep
-monkey.patch_all()
+# from gevent import monkey, sleep
+# monkey.patch_all()
 
 from pymongo import MongoClient
 from bson.json_util import dumps
@@ -143,8 +143,8 @@ def get_visit(id, mongodb):
 
 @app.get('/users/<id:int>/visits')
 def get_user_visits(id, mongodb):
-    try:
-        with gevent.Timeout(2):
+    # try:
+        # with gevent.Timeout(2):
             if not s.get_user(id):
                 return bottle.HTTPError(404)
             fromDate = bottle.request.query.fromDate
@@ -179,14 +179,14 @@ def get_user_visits(id, mongodb):
                 }
             ).sort('visited_at', pymongo.ASCENDING)
             return dumps({'visits': result})
-    except:
-        return {'visits': []}
+    # except:
+    #     return {'visits': []}
 
 
 @app.get('/locations/<id:int>/avg')
 def get_location_avg(id, mongodb):
-    try:
-        with gevent.Timeout(2):
+    # try:
+    #     with gevent.Timeout(2):
             if not s.get_location(id):
                 return bottle.HTTPError(404)
             fromDate = bottle.request.query.fromDate
@@ -227,15 +227,15 @@ def get_location_avg(id, mongodb):
             else:
                 avg = sum(v['mark'] for v in result) / c
             return {'avg': round(avg, 5)}
-    except:
-        return {'avg': 0}
+    # except:
+    #     return {'avg': 0}
 
 
-@app.get('/hello')
-def hello():
-    with gevent.Timeout(2):
-        gevent.sleep(1)
-        return 'Hello'
+# @app.get('/hello')
+# def hello():
+#     with gevent.Timeout(2):
+#         gevent.sleep(1)
+#         return 'Hello'
 
 
 @app.post('/users/<id:int>')
@@ -258,10 +258,6 @@ def update_user(id, mongodb):
         new_age = to_age(data['birth_date'])
         if new_age != user['age']:
             user_update['age'] = new_age
-    # mongodb.users.update(
-    #     {"_id": id},
-    #     {"$set": user_update}
-    # )
     s.update_user(id, user_update)
     visits_update = {}
     if 'gender' in data:
@@ -291,10 +287,6 @@ def update_location(id, mongodb):
         if data[key] is None:
             return bottle.HTTPError(400)
     # TODO validate
-    # mongodb.locations.update(
-    #     {"_id": id},
-    #     {"$set": data}
-    # )
     s.update_location(id, data)
     visits_update = {}
     if 'country' in data:
@@ -374,12 +366,10 @@ def new_location(mongodb):
         if data[key] is None:
             return bottle.HTTPError(400)
     if 'id' in data:
-        # if mongodb.locations.find_one({'_id': data['id']}):
         if s.get_location(data['id']):
             return bottle.HTTPError(400)
     # TODO validate
     data['_id'] = data['id']
-    # mongodb.locations.insert(data)
     s.insert_location(data)
     return {}
 
@@ -396,11 +386,9 @@ def new_visit(mongodb):
         if mongodb.visits.find_one({'_id': data['id']}):
             return bottle.HTTPError(400)
     # TODO validate
-    # user = mongodb.users.find_one({'_id': data['user']})
     user = s.get_user(data['user'])
     if not user:
         return bottle.HTTPError(400)
-    # location = mongodb.locations.find_one({'_id': data['location']})
     location = s.get_location(data['location'])
     if not location:
         return bottle.HTTPError(400)
@@ -481,13 +469,13 @@ def fill_db_inmem(db, path_to_dir):
         db.visits.create_index("user__gender")
 
 
-def run_gevent_app(host, port):
+def run_app(host, port):
     print(port)
-    app.run(host=host, port=port, server='gevent', quiet=False)
+    app.run(host=host, port=port, server='wsgiref', quiet=True)
 
 
 def heat(ports):
-    sleep(10)
+    # sleep(10)
     for _ in range(2):
         for port in ports:
             urllib.urlopen('http://127.0.0.1:' + port + '/users/1')
@@ -502,10 +490,10 @@ if __name__ == '__main__':
     with Timeit("Reading database..."):
         fill_db_inmem(db, path_to_dir=sys.argv[1])
 
-    Process(target=heat, args=(sys.argv[3:],)).start()
+    # Process(target=heat, args=(sys.argv[3:],)).start()
     if len(sys.argv[3:]) > 1:
         for port in sys.argv[3:]:
-            p = Process(target=run_gevent_app, args=(sys.argv[2], port))
+            p = Process(target=run_app, args=(sys.argv[2], port))
             p.start()
     else:
-        run_gevent_app(sys.argv[2], sys.argv[3])
+        run_app(sys.argv[2], sys.argv[3])

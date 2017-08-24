@@ -3,3 +3,5 @@ pymongo
 bottle-mongo
 python-dateutil
 gevent
+paste
+tornado

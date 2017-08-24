@@ -5,7 +5,7 @@ RUN apt-get update \
   && pip install --upgrade pip
 
 
-RUN pip install bottle pymongo bottle-mongo python-dateutil gevent
+RUN pip install bottle pymongo bottle-mongo python-dateutil gevent paste
 
 # Install MongoDB.
 RUN \
@@ -24,6 +24,8 @@ RUN \
   apt-get install -y nginx && \
   rm -rf /var/lib/apt/lists/* && \
   chown -R www-data:www-data /var/lib/nginx
+
+RUN pip install tornado
 
 # Define mountable directories.
 VOLUME ["/etc/nginx/certs", "/etc/nginx/conf.d", "/var/log/nginx", "/var/www/html"]
@@ -46,7 +48,8 @@ COPY nginx_balance.conf /etc/nginx/sites-enabled/default
 ADD . /app
 WORKDIR /app
 
-CMD nginx; \
+CMD \
+    nginx; \
     mongod --fork --logpath mongodb_logs; \
     python unzip_data.py /tmp/data/data.zip; \
     python run_all.py data 0.0.0.0 8080
