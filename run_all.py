@@ -99,7 +99,7 @@ class InmemStorage(Storage):
 
     @classmethod
     def insert_location(cls, data):
-        cls.user_dict[data['id']] = data
+        cls.location_dict[data['id']] = data
 
 
 class MongoStorage(Storage):
@@ -240,7 +240,6 @@ def hello():
 
 @app.post('/users/<id:int>')
 def update_user(id, mongodb):
-    # user = mongodb.users.find_one({'_id': id})
     user = s.get_user(id)
     if not user:
         return bottle.HTTPError(404)
@@ -280,7 +279,6 @@ def update_user(id, mongodb):
 
 @app.post('/locations/<id:int>')
 def update_location(id, mongodb):
-    # location = mongodb.locations.find_one({'_id': id})
     location = s.get_location(id)
     if not location:
         return bottle.HTTPError(404)
@@ -330,14 +328,12 @@ def update_visit(id, mongodb):
     # TODO validate
 
     if 'user' in data:
-        # user = mongodb.users.find_one({'_id': data['user']})
         user = s.get_user(data['user'])
         if not user:
             return bottle.HTTPError(400)
         data['user__age'] = user['age']
         data['user__gender'] = user['gender']
     if 'location' in data:
-        # location = mongodb.locations.find_one({'_id': data['location']})
         location = s.get_location(data['location'])
         if not location:
             return bottle.HTTPError(400)
@@ -360,13 +356,11 @@ def new_user(mongodb):
         if data[key] is None:
             return bottle.HTTPError(400)
     if 'id' in data:
-        # if mongodb.users.find_one({'_id': data['id']}):
         if s.get_user(data['id']):
             return bottle.HTTPError(400)
     # TODO validate
     data['_id'] = data['id']
     data['age'] = to_age(data['birth_date'])
-    # mongodb.users.insert(data)
     s.insert_user(data)
     return {}
 
@@ -472,21 +466,35 @@ def fill_db_inmem(db, path_to_dir):
             visits.extend(data['visits'])
 
     with Timeit("Inserting..."):
-        # db.users.insert_many(users)
-        # db.locations.insert_many(locations)
         db.visits.insert_many(visits)
-        # print("Users count: " + str(db.users.find({}).count()))
-        # print("Locations count: " + str(db.locations.find({}).count()))
+        print("Users count: " + str(len(s.user_dict)))
+        print("Locations count: " + str(len(s.location_dict)))
         print("Visits count: " + str(db.visits.find({}).count()))
 
     with Timeit("Creating indexes..."):
         db.visits.create_index("user")
         db.visits.create_index("location")
+        db.visits.create_index("location__distance")
+        db.visits.create_index("location__country")
+        db.visits.create_index("place")
+        db.visits.create_index("user__age")
+        db.visits.create_index("user__gender")
 
 
 def run_gevent_app(host, port):
     print(port)
-    app.run(host=host, port=port, server='gevent')
+    app.run(host=host, port=port, server='gevent', quiet=False)
+
+
+def heat(ports):
+    sleep(10)
+    for _ in range(2):
+        for port in ports:
+            urllib.urlopen('http://127.0.0.1:' + port + '/users/1')
+        for port in ports:
+            urllib.urlopen('http://127.0.0.1:' + port + '/users/100/visits')
+        for port in ports:
+            urllib.urlopen('http://127.0.0.1:' + port + '/locations/500/avg')
 
 if __name__ == '__main__':
     client = MongoClient()
@@ -494,12 +502,10 @@ if __name__ == '__main__':
     with Timeit("Reading database..."):
         fill_db_inmem(db, path_to_dir=sys.argv[1])
 
+    Process(target=heat, args=(sys.argv[3:],)).start()
     if len(sys.argv[3:]) > 1:
         for port in sys.argv[3:]:
             p = Process(target=run_gevent_app, args=(sys.argv[2], port))
             p.start()
     else:
         run_gevent_app(sys.argv[2], sys.argv[3])
-    sleep(2)
-    for port in sys.argv[3:]:
-        urllib.urlopen('http://127.0.0.1:' + str(port))

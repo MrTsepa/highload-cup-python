@@ -14,13 +14,18 @@ except Exception:
 NOW_datetime = datetime.datetime.fromtimestamp(NOW_timestamp).replace(hour=0, minute=0, second=0)
 
 aggregation_query = [
-    {'$lookup': {
-        'from': 'locations',
-        'localField': 'location',
-        'foreignField': '_id',
-        'as': 'location_full'
-    }},
-    {'$unwind': '$location_full'},
+    # {'$lookup': {
+    #     'from': 'locations',
+    #     'localField': 'location',
+    #     'foreignField': '_id',
+    #     'as': 'location_full'
+    # }},
+    # {'$unwind': '$location_full'},
+    # {'$addFields': {
+    #     'location__distance': '$location_full.distance',
+    #     'location__country': '$location_full.country',
+    #     'place': '$location_full.place',
+    # }},
     {'$lookup': {
         'from': 'users',
         'localField': 'user',
@@ -29,12 +34,36 @@ aggregation_query = [
     }},
     {'$unwind': '$user_full'},
     {'$addFields': {
-        'location__distance': '$location_full.distance',
-        'location__country': '$location_full.country',
-        'place': '$location_full.place',
         'user__age': '$user_full.age',
         'user__gender': '$user_full.gender',
     }},
+    {'$out': 'visits'}
+]
+
+aggregation_query2 = [
+    {'$lookup': {
+        'from': 'locations',
+        'localField': 'location',
+        'foreignField': '_id',
+        'as': 'location_full'
+    }},
+    {'$unwind': '$location_full'},
+    {'$addFields': {
+        'location__distance': '$location_full.distance',
+        'location__country': '$location_full.country',
+        'place': '$location_full.place',
+    }},
+    # {'$lookup': {
+    #     'from': 'users',
+    #     'localField': 'user',
+    #     'foreignField': '_id',
+    #     'as': 'user_full'
+    # }},
+    # {'$unwind': '$user_full'},
+    # {'$addFields': {
+    #     'user__age': '$user_full.age',
+    #     'user__gender': '$user_full.gender',
+    # }},
     {'$out': 'visits'}
 ]
 
@@ -108,6 +137,7 @@ def fill_db_full(db, path_to_dir=PATH_TO_FULL):
 
     with Timeit("Aggregating..."):
         db.visits.aggregate(aggregation_query)
+        db.visits.aggregate(aggregation_query2)
 
     with Timeit("Creating indexes..."):
         db.visits.create_index("user")
