@@ -49,7 +49,7 @@ WORKDIR /app
 CMD nginx; \
     mongod --fork --logpath mongodb_logs; \
     python unzip_data.py /tmp/data/data.zip; \
-    python fill_db_full.py; \
+    python fill_db_full.py data; \
     python run_multi_gevent.py 0.0.0.0 8080 8081 8082 8083
 
 #    python run_gevent.py 0.0.0.0 80

@@ -119,7 +119,6 @@ def fill_db_inmem(db, path_to_dir=PATH_TO_FULL):
     with Timeit("Clearing db"):
         delete_all(db)
     user_dict = {}
-    users = []
     with Timeit("Reading users..."):
         for i in range(1, 100):
             path = '{}/users_{}.json'.format(path_to_dir, i)
@@ -130,11 +129,11 @@ def fill_db_inmem(db, path_to_dir=PATH_TO_FULL):
             for user in data['users']:
                 user['_id'] = user['id']
                 user['age'] = to_age(user['birth_date'])
-                user_dict[user['id']] = user
-            users.extend(data['users'])
+                user_dict[user['id']] = {'age': user['age'], 'gender': user['gender']}
+            db.users.insert_many(data['users'])
+            # users.extend(data['users'])
 
     location_dict = {}
-    locations = []
     with Timeit("Reading locations..."):
         for i in range(1, 100):
             path = '{}/locations_{}.json'.format(path_to_dir, i)
@@ -144,10 +143,14 @@ def fill_db_inmem(db, path_to_dir=PATH_TO_FULL):
                 break
             for location in data['locations']:
                 location['_id'] = location['id']
-                location_dict[location['id']] = location
-            locations.extend(data['locations'])
+                location_dict[location['id']] = {
+                    'distance': location['distance'],
+                    'country': location['country'],
+                    'place': location['place']
+                }
+            db.locations.insert_many(data['locations'])
+            # locations.extend(data['locations'])
 
-    visits = []
     with Timeit("Reading visits..."):
         for i in range(1, 100):
             path = '{}/visits_{}.json'.format(path_to_dir, i)
@@ -164,17 +167,18 @@ def fill_db_inmem(db, path_to_dir=PATH_TO_FULL):
                 visit['place'] = location_dict[location_id]['place']
                 visit['user__age'] = user_dict[user_id]['age']
                 visit['user__gender'] = user_dict[user_id]['gender']
-            visits.extend(data['visits'])
+            db.visits.insert_many(data['visits'])
 
-    with Timeit("Inserting..."):
-        db.users.insert_many(users)
-        db.locations.insert_many(locations)
-        db.visits.insert_many(visits)
-        print("Users count: " + str(db.users.find({}).count()))
-        print("Locations count: " + str(db.locations.find({}).count()))
-        print("Visits count: " + str(db.visits.find({}).count()))
+    print("Users count: " + str(db.users.find({}).count()))
+    print("Locations count: " + str(db.locations.find({}).count()))
+    print("Visits count: " + str(db.visits.find({}).count()))
 
     with Timeit("Creating indexes..."):
         db.visits.create_index("user")
         db.visits.create_index("location")
         # db.visits.create_index("visited_at")
+        # db.visits.create_index("location__distance")
+        # db.visits.create_index("location__country")
+        # db.visits.create_index("place")
+        # db.visits.create_index("user__age")
+        # db.visits.create_index("user__gender")

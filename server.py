@@ -121,14 +121,26 @@ def get_location_avg(id, mongodb):
                     filter_query['user__gender'] = gender
             except ValueError:
                 return bottle.HTTPError(400)
-
-            result = mongodb.visits.find(filter_query, {'mark': True})
-            c = result.count()
-            if c == 0:
-                avg = 0
-            else:
-                avg = sum(v['mark'] for v in result) / c
+            c = mongodb.visits.aggregate([
+                    {'$match': filter_query},
+                    {'$group': {
+                        '_id': 'null',
+                        'avg': {'$avg': '$mark'}
+                    }}
+                ])
+            for x in c:
+                avg = x['avg']
+                break
             return {'avg': round(avg, 5)}
+
+                    # result = mongodb.visits.find(filter_query, {'mark': True})
+            # c = result.count()
+            # if c == 0:
+            #     avg = 0
+            # else:
+            #     avg = sum(v['mark'] for v in result) / c
+            # return {'avg': round(avg, 5)}
+
     except:
         return {'avg': 0}
 
