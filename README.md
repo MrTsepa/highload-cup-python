@@ -1,5 +1,5 @@
 # highload-cup-python
-Решение [https://highloadcup.ru/](highload cup) на фреймворке bottle
+Решение [highload cup](https://highloadcup.ru/) на фреймворке bottle
 
 Связка технологий: веб: `python + bottle + gevent`, бд: `MongoDB`, а также `nginx` для балансировки и кэширования.
 
