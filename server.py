@@ -8,7 +8,7 @@ import bottle
 import pymongo
 from bottle.ext.mongo import MongoPlugin
 
-from utils import to_age
+from utils import to_age, Timeit
 
 app = bottle.Bottle()
 plugin = MongoPlugin(uri="mongodb://127.0.0.1", db="highload", json_mongo=True)
@@ -46,7 +46,7 @@ def get_visit(id, mongodb):
 @app.get('/users/<id:int>/visits')
 def get_user_visits(id, mongodb):
     try:
-        with gevent.Timeout(2):
+        with gevent.Timeout(1):
             if not mongodb.users.find_one({'_id': id}):
                 return bottle.HTTPError(404)
             fromDate = bottle.request.query.fromDate
@@ -88,7 +88,7 @@ def get_user_visits(id, mongodb):
 @app.get('/locations/<id:int>/avg')
 def get_location_avg(id, mongodb):
     try:
-        with gevent.Timeout(2):
+        with gevent.Timeout(1):
             if not mongodb.locations.find_one({'_id': id}):
                 return bottle.HTTPError(404)
             fromDate = bottle.request.query.fromDate
@@ -98,6 +98,7 @@ def get_location_avg(id, mongodb):
             gender = bottle.request.query.gender
 
             filter_query = {'location': id}
+            # with Timeit('Validating...'):
             try:
                 if fromDate:
                     if 'visited_at' not in filter_query:
@@ -121,13 +122,27 @@ def get_location_avg(id, mongodb):
                     filter_query['user__gender'] = gender
             except ValueError:
                 return bottle.HTTPError(400)
-
-            result = mongodb.visits.find(filter_query, {'mark': True})
-            c = result.count()
-            if c == 0:
-                avg = 0
-            else:
-                avg = sum(v['mark'] for v in result) / c
+            # with Timeit('Querying...'):
+            #     result = mongodb.visits.find(filter_query, {'mark': True})
+            # with Timeit('Calc...'):
+            #     c = result.count()
+            #     if c == 0:
+            #         avg = 0
+            #     else:
+            #         avg = sum(v['mark'] for v in result) / c
+            # with Timeit('Querying and avg...'):
+            avg_aggregation = mongodb.visits.aggregate([
+                {'$match': filter_query},
+                {'$group': {
+                    '_id': 'null',
+                    'avg': {'$avg': '$mark'}
+                }},
+                {'$limit': 1}
+            ])
+            avg = 0
+            for e in avg_aggregation:
+                avg = e['avg']
+                break  # doesn't support ...[0]
             return {'avg': round(avg, 5)}
     except:
         return {'avg': 0}

@@ -26,7 +26,7 @@ RUN \
   chown -R www-data:www-data /var/lib/nginx
 
 # Define mountable directories.
-VOLUME ["/etc/nginx/certs", "/etc/nginx/conf.d", "/var/log/nginx", "/var/www/html"]
+VOLUME ["/etc/nginx/certs", "/etc/nginx/conf.d", "/var/log/nginx", "/var/www/html", "/var/cache/nginx"]
 
 
 # Define mountable directories.
@@ -40,16 +40,17 @@ WORKDIR /data
 # Expose ports
 EXPOSE 80
 
-
+COPY nginx.conf /etc/nginx/nginx.conf
 COPY nginx_balance.conf /etc/nginx/sites-enabled/default
 
 ADD . /app
 WORKDIR /app
 
-CMD nginx; \
+CMD python prepare_nginx.py /tmp/data; \
+    nginx; \
     mongod --fork --logpath mongodb_logs; \
-    python unzip_data.py /tmp/data/data.zip; \
-    python fill_db_full.py; \
+    python fill_db_full.py /tmp/data/data.zip; \
+    tail -10 mongodb_logs; \
     python run_multi_gevent.py 0.0.0.0 8080 8081 8082 8083
 
 #    python run_gevent.py 0.0.0.0 80

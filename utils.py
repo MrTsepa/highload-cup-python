@@ -1,6 +1,10 @@
 # coding=utf-8
 import datetime
 import json
+
+import sqlite3
+from zipfile import ZipFile
+
 from dateutil.relativedelta import relativedelta
 from time import time
 PATH_TO_DATA = 'data'
@@ -41,18 +45,21 @@ aggregation_query = [
 
 class Timeit:
 
-    def __init__(self, message=''):
+    def __init__(self, message='', v=2):
         self.message = message
+        self.v = v
         self.start = None
         self.end = None
 
     def __enter__(self):
-        print("+ " + self.message)
+        if self.v == 2:
+            print("+ " + self.message)
         self.start = time()
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         self.end = time()
-        print("- " + self.message + " in " + str(self.end - self.start))
+        if self.v >= 1:
+            print("- " + self.message + " in " + str(self.end - self.start))
 
 
 def to_age(timestamp):
@@ -112,16 +119,138 @@ def fill_db_full(db, path_to_dir=PATH_TO_FULL):
     with Timeit("Creating indexes..."):
         db.visits.create_index("user")
         db.visits.create_index("location")
-        db.visits.create_index("visited_at")
+        # db.visits.create_index("visited_at")
 
 
 def fill_db_inmem(db, path_to_dir=PATH_TO_FULL):
     with Timeit("Clearing db"):
         delete_all(db)
+
     user_dict = {}
-    users = []
     with Timeit("Reading users..."):
-        for i in range(1, 100):
+        for i in range(1, 1000):
+            path = '{}/users_{}.json'.format(path_to_dir, i)
+            try:
+                data = json.load(open(path, 'r'))
+            except:
+                break
+            print(i)
+            for user in data['users']:
+                user['_id'] = user['id']
+                user['age'] = to_age(user['birth_date'])
+                user_dict[user['id']] = (user['age'], user['gender'])
+            db.users.insert_many(data['users'])
+    print(db.users.find({}).count())
+    location_dict = {}
+    with Timeit("Reading locations..."):
+        for i in range(1, 1000):
+            path = '{}/locations_{}.json'.format(path_to_dir, i)
+            try:
+                data = json.load(open(path, 'r'))
+            except:
+                break
+            for location in data['locations']:
+                location['_id'] = location['id']
+                location_dict[location['id']] = (
+                    location['distance'],
+                    location['country'],
+                    location['place']
+                )
+            db.locations.insert_many(data['locations'])
+    # with Timeit("Creating indexes..."):
+    #     db.visits.create_index("user")
+    #     db.visits.create_index("location")
+
+    with Timeit("Reading visits..."):
+        for i in range(1, 1000):
+            path = '{}/visits_{}.json'.format(path_to_dir, i)
+            try:
+                data = json.load(open(path, 'r'))
+            except:
+                break
+            print(i)
+            for visit in data['visits']:
+                visit['_id'] = visit['id']
+
+                visit['location__distance'], visit['location__country'], visit['place'] = \
+                    location_dict[visit['location']]
+                visit['user__age'], visit['user__gender'] = \
+                    user_dict[visit['user']]
+            db.visits.insert_many(data['visits'])
+        #     visits.extend(data['visits'])
+        # db.visits.insert_many(visits, ordered=False)
+
+    print(db.users.find({}).count(), db.locations.find({}).count(), db.visits.find({}).count())
+
+
+
+def fill_db_inmem_zip(db, path_to_zip):
+    delete_all(db)
+    archiv = ZipFile(path_to_zip)
+
+    user_dict = {}
+    with Timeit("Reading users...", v=1):
+        for i in range(1, 1000):
+            try:
+                data = json.load(archiv.open('users_{}.json'.format(i)))
+            except:
+                break
+            for user in data['users']:
+                user['_id'] = user['id']
+                user['age'] = to_age(user['birth_date'])
+                user_dict[user['id']] = (user['age'], user['gender'])
+            db.users.insert_many(data['users'])
+    location_dict = {}
+    with Timeit("Reading locations...", v=0):
+        for i in range(1, 1000):
+            try:
+                data = json.load(archiv.open('locations_{}.json'.format(i)))
+            except:
+                break
+            for location in data['locations']:
+                location['_id'] = location['id']
+                location_dict[location['id']] = (
+                    location['distance'],
+                    location['country'],
+                    location['place']
+                )
+
+            db.locations.insert_many(data['locations'])
+
+    # with Timeit("Indexes..."):
+    #     db.visits.create_index("user")
+    #     db.visits.create_index("location")
+
+    with Timeit("Reading visits...", v=1):
+        for i in range(1, 1000):
+            try:
+                data = json.load(archiv.open('visits_{}.json'.format(i)))
+            except:
+                break
+            for visit in data['visits']:
+                visit['_id'] = visit['id']
+
+                visit['location__distance'], visit['location__country'], visit['place'] = \
+                    location_dict[visit['location']]
+                visit['user__age'], visit['user__gender'] = \
+                    user_dict[visit['user']]
+            db.visits.insert_many(data['visits'], ordered=False)
+
+    print(db.users.find({}).count(), db.locations.find({}).count(), db.visits.find({}).count())
+
+
+def fill_db_inmem_sqlite(db, path_to_dir=PATH_TO_FULL):
+    with Timeit("Clearing db"):
+        delete_all(db)
+
+    conn = sqlite3.connect(':memory:')
+    c = conn.cursor()
+    c.execute('''CREATE TABLE users (
+                  id int PRIMARY KEY, age int, gender text)''')
+    c.execute('''CREATE TABLE locations (
+                  id int PRIMARY KEY, distance int, country text, place text)''')
+    with Timeit("Reading users..."):
+        for i in range(1, 1000):
             path = '{}/users_{}.json'.format(path_to_dir, i)
             try:
                 data = json.load(open(path, 'r'))
@@ -130,13 +259,12 @@ def fill_db_inmem(db, path_to_dir=PATH_TO_FULL):
             for user in data['users']:
                 user['_id'] = user['id']
                 user['age'] = to_age(user['birth_date'])
-                user_dict[user['id']] = user
-            users.extend(data['users'])
+            c.executemany('''INSERT INTO users (id, age, gender) VALUES (?,?,?)''',
+                          ((user['id'], user['age'], user['gender']) for user in data['users']))
+            db.users.insert_many(data['users'])
 
-    location_dict = {}
-    locations = []
     with Timeit("Reading locations..."):
-        for i in range(1, 100):
+        for i in range(1, 1000):
             path = '{}/locations_{}.json'.format(path_to_dir, i)
             try:
                 data = json.load(open(path, 'r'))
@@ -144,12 +272,12 @@ def fill_db_inmem(db, path_to_dir=PATH_TO_FULL):
                 break
             for location in data['locations']:
                 location['_id'] = location['id']
-                location_dict[location['id']] = location
-            locations.extend(data['locations'])
+            c.execute('''INSERT INTO locations (id, distance, country, place) VALUES (?,?,?,?)''',
+                      ((location['id'], location['distance'], location['country'], location['place']) for location in data['locations']))
+            db.locations.insert_many(data['locations'])
 
-    visits = []
     with Timeit("Reading visits..."):
-        for i in range(1, 100):
+        for i in range(1, 1000):
             path = '{}/visits_{}.json'.format(path_to_dir, i)
             try:
                 data = json.load(open(path, 'r'))
@@ -157,22 +285,20 @@ def fill_db_inmem(db, path_to_dir=PATH_TO_FULL):
                 break
             for visit in data['visits']:
                 visit['_id'] = visit['id']
-                location_id = visit['location']
-                user_id = visit['user']
-                visit['location__distance'] = location_dict[location_id]['distance']
-                visit['location__country'] = location_dict[location_id]['country']
-                visit['place'] = location_dict[location_id]['place']
-                visit['user__age'] = user_dict[user_id]['age']
-                visit['user__gender'] = user_dict[user_id]['gender']
-            visits.extend(data['visits'])
+                location__distance, location__country, place = c.execute(
+                    "SELECT distance, country, place FROM locations WHERE id=?", (visit['location'],)
+                ).fetchone()
+                user__age, user__gender = c.execute(
+                    "SELECT age, gender FROM users WHERE id=?", (visit['user'],)
+                ).fetchone()
+                visit['location__distance'] = location__distance
+                visit['location__country'] = location__country
+                visit['place'] = place
+                visit['user__age'] = user__age
+                visit['user__gender'] = user__gender
+            db.visits.insert_many(data['visits'])
 
-    with Timeit("Inserting..."):
-        db.users.insert_many(users)
-        db.locations.insert_many(locations)
-        db.visits.insert_many(visits)
-        print("Users count: " + str(db.users.find({}).count()))
-        print("Locations count: " + str(db.locations.find({}).count()))
-        print("Visits count: " + str(db.visits.find({}).count()))
+    print(db.users.find({}).count(), db.locations.find({}).count(), db.visits.find({}).count())
 
     with Timeit("Creating indexes..."):
         db.visits.create_index("user")
